@@ -53,7 +53,10 @@ func (d *Docx) Replace(oldString string, newString string, num int) (err error) 
 	return nil
 }
 
-// ReplaceLoop replaces ...
+// ReplaceLoop iterates through the loop in docx
+// for each elemen tin the given data array.
+// During each run of the iteration, the loop placeholders are replaces with
+// the given values in the corresponding data element.
 func (d *Docx) ReplaceLoop(loopvar string, data []map[string]string) (err error) {
 	var newContent = ""
 	buf := bytes.NewBufferString(newContent)
@@ -80,12 +83,12 @@ func (d *Docx) ReplaceLoop(loopvar string, data []map[string]string) (err error)
 		case xml.CharData:
 			if charData, ok := t.(xml.CharData); ok {
 				cd := strings.Trim(string([]byte(charData)), " ")
-				if cd == "«start:topic»" {
+				if cd == "«start:"+loopvar+"»" {
 					isIn = true
 					isBefore = false
 					isAfter = false
 					continue
-				} else if cd == "«end:topic»" {
+				} else if cd == "«end:"+loopvar+"»" {
 					isIn = false
 					isBefore = false
 					isAfter = true
@@ -115,20 +118,21 @@ func (d *Docx) ReplaceLoop(loopvar string, data []map[string]string) (err error)
 	fmt.Println("Starting parsing loop ...")
 	for idx, loopElement := range data {
 		fmt.Printf("Iteration %d ... \n", idx)
+
+		// Check if tokens have to be replaced with given data values
 		for _, token := range inTokens {
-			newToken := xml.CopyToken(token) // TODO: do we need a copy here?
+			newToken := xml.CopyToken(token) // TODO: Do we need a copy here?
 			switch newToken.(type) {
 			case xml.CharData:
 				if charData, ok := newToken.(xml.CharData); ok {
 					cd := strings.Trim(string([]byte(charData)), " ")
+					// TODO: use convention, key in data = <<key>> in docx ?
 					if cd == "«name»" {
 						newToken = xml.CharData(loopElement["name"])
 					} else if cd == "«pos»" {
 						newToken = xml.CharData(loopElement["pos"])
 					} else if cd == "«user»" {
 						newToken = xml.CharData(loopElement["user"])
-					} else {
-						// TODO: Other placeholders
 					}
 				}
 			default:
