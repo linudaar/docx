@@ -52,8 +52,8 @@ func (d *Docx) Replace(oldString string, newString string, num int) (err error) 
 	if err != nil {
 		return err
 	}
-	d.content = strings.Replace(d.content, oldString, newString, num)
 
+	d.content = strings.Replace(d.content, mergeFieldOpenTag+oldString+mergeFieldCloseTag, newString, num)
 	return nil
 }
 

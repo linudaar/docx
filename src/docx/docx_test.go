@@ -31,6 +31,9 @@ func TestReplace(t *testing.T) {
 		},
 	}
 
+	docx1.Replace("AgendaHeader", "My Cool Agenda", 1)
+	docx1.Replace("MeetingDate", "1.1.2017", 1)
+
 	docx1.ReplaceLoop("topic", topics)
 	docx1.WriteToFile("output.docx")
 }
