@@ -200,6 +200,21 @@ func ReadDocxFile(path string) (*ReplaceDocx, error) {
 	return &ReplaceDocx{zipReader: reader, content: content}, nil
 }
 
+// ReadDoxFileFromBytes ...
+func ReadDoxFileFromBytes(zipBytes []byte) (*ReplaceDocx, error) {
+	reader, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		return nil, err
+	}
+	content, err := readText(reader.File)
+	if err != nil {
+		return nil, err
+	}
+
+	readCloser := &zip.ReadCloser{Reader: *reader}
+	return &ReplaceDocx{zipReader: readCloser, content: content}, nil
+}
+
 func readText(files []*zip.File) (text string, err error) {
 	var documentFile *zip.File
 	documentFile, err = retrieveWordDoc(files)

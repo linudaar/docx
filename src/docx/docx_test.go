@@ -2,11 +2,17 @@ package docx_test
 
 import (
 	"docx"
+	"io/ioutil"
 	"testing"
 )
 
 func TestReplace(t *testing.T) {
-	r, err := docx.ReadDocxFile("template.docx")
+	fileBytes, err := ioutil.ReadFile("template.docx")
+	if err != nil {
+		panic(err)
+	}
+
+	r, err := docx.ReadDoxFileFromBytes(fileBytes)
 	if err != nil {
 		panic(err)
 	}
