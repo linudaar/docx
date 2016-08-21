@@ -6,12 +6,16 @@ import (
 	"bytes"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"strings"
 )
+
+const mergeFieldOpenTag = "«"
+const mergeFieldCloseTag = "»"
+const loopStartPrefix = "start:"
+const loopEndPrefix = "end:"
 
 // ReplaceDocx represents a replacable docx
 type ReplaceDocx struct {
@@ -57,98 +61,92 @@ func (d *Docx) Replace(oldString string, newString string, num int) (err error) 
 // for each elemen tin the given data array.
 // During each run of the iteration, the loop placeholders are replaces with
 // the given values in the corresponding data element.
-func (d *Docx) ReplaceLoop(loopvar string, data []map[string]string) (err error) {
-	var newContent = ""
-	buf := bytes.NewBufferString(newContent)
-
+func (d *Docx) ReplaceLoop(loopVarName string, data []map[string]string) (err error) {
+	newContent := ""
+	newBuffer := bytes.NewBufferString(newContent)
+	newTokens := make(map[string][]xml.Token)
 	decoder := xml.NewDecoder(strings.NewReader(d.content))
-	encoder := xml.NewEncoder(buf)
+	encoder := xml.NewEncoder(newBuffer)
 
-	isBefore := true
-	isIn := false
-	isAfter := true
+	// pos indicates the position of the token
+	// "before" ... token is before the loop block
+	// "in"     ... token is part of the loop block
+	// "after"  ... token is after of th loop block
+	pos := "before"
 
-	var beforeTokens []xml.Token
-	var inTokens []xml.Token
-	var afterTokens []xml.Token
-
-	// Parse document xml and group tokens in before-loop, part-of-loop, after-loop
+	// Parse document XML and partition tokens
+	// in 3 buckets: before-loop, in-loop, after-loop
 	for {
 		t, _ := decoder.Token()
 		if t == nil {
 			break
 		}
 
-		switch t.(type) {
+		switch node := t.(type) {
 		case xml.CharData:
 			if charData, ok := t.(xml.CharData); ok {
 				cd := strings.Trim(string([]byte(charData)), " ")
-				if cd == "«start:"+loopvar+"»" {
-					isIn = true
-					isBefore = false
-					isAfter = false
+				if cd == mergeFieldOpenTag+loopStartPrefix+loopVarName+mergeFieldCloseTag {
+					pos = "in"
 					continue
-				} else if cd == "«end:"+loopvar+"»" {
-					isIn = false
-					isBefore = false
-					isAfter = true
+				} else if cd == mergeFieldOpenTag+loopEndPrefix+loopVarName+mergeFieldCloseTag {
+					pos = "after"
 					continue
-				} else {
 				}
 			}
-		default:
+		// WORKAROUND: The genereated document.xml is not fully valid
+		// however, MS Word manages to open it with a warning.
+		// In order to circumvent the warning, we have to skip the attribute "Ignorable"
+		// In the <document/> root element.
+		case xml.StartElement:
+			if node.Name.Local == "document" {
+				var newAttr []xml.Attr
+				for _, attr := range node.Attr {
+					if strings.ToLower(attr.Name.Local) != "ignorable" {
+						newAttr = append(newAttr, attr)
+					}
+				}
+				node.Attr = newAttr
+				t = node
+			}
 		}
-
-		if isBefore {
-			beforeTokens = append(beforeTokens, xml.CopyToken(t))
-		} else if isIn {
-			inTokens = append(inTokens, xml.CopyToken(t))
-		} else if isAfter {
-			afterTokens = append(afterTokens, xml.CopyToken(t))
-		}
-
+		newTokens[pos] = append(newTokens[pos], xml.CopyToken(t))
 	}
 
 	// Copy the tokens before the loop (header)
-	for _, token := range beforeTokens {
+	for _, token := range newTokens["before"] {
 		encoder.EncodeToken(token)
 	}
 
 	// Iterate the loop tokens for each loop element
-	fmt.Println("Starting parsing loop ...")
-	for idx, loopElement := range data {
-		fmt.Printf("Iteration %d ... \n", idx)
-
+	for _, loopElement := range data {
 		// Check if tokens have to be replaced with given data values
-		for _, token := range inTokens {
+		for _, token := range newTokens["in"] {
 			newToken := xml.CopyToken(token) // TODO: Do we need a copy here?
 			switch newToken.(type) {
 			case xml.CharData:
 				if charData, ok := newToken.(xml.CharData); ok {
 					cd := strings.Trim(string([]byte(charData)), " ")
-					// TODO: use convention, key in data = <<key>> in docx ?
-					if cd == "«name»" {
-						newToken = xml.CharData(loopElement["name"])
-					} else if cd == "«pos»" {
-						newToken = xml.CharData(loopElement["pos"])
-					} else if cd == "«user»" {
-						newToken = xml.CharData(loopElement["user"])
+					if strings.HasPrefix(cd, "«") && strings.HasSuffix(cd, "»") {
+						key := cd[2 : len(cd)-2]
+						if val, ok := loopElement[key]; ok {
+							newToken = xml.CharData(val)
+						}
 					}
 				}
-			default:
 			}
-
 			encoder.EncodeToken(newToken)
 		}
 	}
 
 	// Copy the tokens after the loop
-	for _, token := range afterTokens {
+	for _, token := range newTokens["after"] {
 		encoder.EncodeToken(token)
 	}
+
 	encoder.Flush()
 
-	d.content = buf.String()
+	d.content = newBuffer.String()
 	return nil
 }
 
