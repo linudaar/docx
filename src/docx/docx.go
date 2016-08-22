@@ -4,12 +4,13 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
-	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"strings"
+	"xml"
 )
 
 const mergeFieldOpenTag = "«"
@@ -27,7 +28,7 @@ type ReplaceDocx struct {
 func (r *ReplaceDocx) Editable() *Docx {
 	return &Docx{
 		files:   r.zipReader.File,
-		content: r.content,
+		Content: r.content,
 	}
 }
 
@@ -39,7 +40,7 @@ func (r *ReplaceDocx) Close() error {
 // Docx represents a docx
 type Docx struct {
 	files   []*zip.File
-	content string
+	Content string
 }
 
 // Replace replaces a string
@@ -53,7 +54,7 @@ func (d *Docx) Replace(oldString string, newString string, num int) (err error) 
 		return err
 	}
 
-	d.content = strings.Replace(d.content, mergeFieldOpenTag+oldString+mergeFieldCloseTag, newString, num)
+	d.Content = strings.Replace(d.Content, mergeFieldOpenTag+oldString+mergeFieldCloseTag, newString, num)
 	return nil
 }
 
@@ -62,11 +63,35 @@ func (d *Docx) Replace(oldString string, newString string, num int) (err error) 
 // During each run of the iteration, the loop placeholders are replaces with
 // the given values in the corresponding data element.
 func (d *Docx) ReplaceLoop(loopVarName string, data []map[string]string) (err error) {
+	fmt.Printf("ReplaceLoop %q \n", loopVarName)
 	newContent := ""
 	newBuffer := bytes.NewBufferString(newContent)
 	newTokens := make(map[string][]xml.Token)
-	decoder := xml.NewDecoder(strings.NewReader(d.content))
+	decoder := xml.NewDecoder(strings.NewReader(d.Content))
 	encoder := xml.NewEncoder(newBuffer)
+	encoder.OptimizeNamespaces(true)
+	encoder.PrefixElements(true)
+	encoder.Namespace("w", "http://schemas.openxmlformats.org/wordprocessingml/2006/main")
+	encoder.Namespace("w14", "http://schemas.microsoft.com/office/word/2010/wordml")
+	encoder.Namespace("xmlns", "xmlns")
+	encoder.Namespace("wpc", "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas")
+	encoder.Namespace("mo", "http://schemas.microsoft.com/office/mac/office/2008/main")
+	encoder.Namespace("mc", "http://schemas.openxmlformats.org/markup-compatibility/2006")
+	encoder.Namespace("mv", "urn:schemas-microsoft-com:mac:vml")
+	encoder.Namespace("o", "urn:schemas-microsoft-com:office:office")
+	encoder.Namespace("r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships")
+	encoder.Namespace("m", "http://schemas.openxmlformats.org/officeDocument/2006/math")
+	encoder.Namespace("v", "urn:schemas-microsoft-com:vml")
+	encoder.Namespace("wp14", "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing")
+	encoder.Namespace("wp", "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing")
+	encoder.Namespace("w10", "urn:schemas-microsoft-com:office:word")
+	encoder.Namespace("w", "http://schemas.openxmlformats.org/wordprocessingml/2006/main")
+	encoder.Namespace("w14", "http://schemas.microsoft.com/office/word/2010/wordml")
+	encoder.Namespace("w15", "http://schemas.microsoft.com/office/word/2012/wordml")
+	encoder.Namespace("wpg", "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup")
+	encoder.Namespace("wpi", "http://schemas.microsoft.com/office/word/2010/wordprocessingInk")
+	encoder.Namespace("wne", "http://schemas.microsoft.com/office/word/2006/wordml")
+	encoder.Namespace("wps", "http://schemas.microsoft.com/office/word/2010/wordprocessingShape")
 
 	// pos indicates the position of the token
 	// "before" ... token is before the loop block
@@ -87,9 +112,11 @@ func (d *Docx) ReplaceLoop(loopVarName string, data []map[string]string) (err er
 			if charData, ok := t.(xml.CharData); ok {
 				cd := strings.Trim(string([]byte(charData)), " ")
 				if cd == mergeFieldOpenTag+loopStartPrefix+loopVarName+mergeFieldCloseTag {
+					fmt.Printf("open tag %q \n", cd)
 					pos = "in"
 					continue
 				} else if cd == mergeFieldOpenTag+loopEndPrefix+loopVarName+mergeFieldCloseTag {
+					fmt.Printf("close tag %q \n", cd)
 					pos = "after"
 					continue
 				}
@@ -110,6 +137,7 @@ func (d *Docx) ReplaceLoop(loopVarName string, data []map[string]string) (err er
 				t = node
 			}
 		}
+
 		newTokens[pos] = append(newTokens[pos], xml.CopyToken(t))
 	}
 
@@ -128,8 +156,10 @@ func (d *Docx) ReplaceLoop(loopVarName string, data []map[string]string) (err er
 				if charData, ok := newToken.(xml.CharData); ok {
 					cd := strings.Trim(string([]byte(charData)), " ")
 					if strings.HasPrefix(cd, "«") && strings.HasSuffix(cd, "»") {
+						fmt.Printf("Found placeholder %q", cd)
 						key := cd[2 : len(cd)-2]
 						if val, ok := loopElement[key]; ok {
+							fmt.Printf("... replacing with %q \n", val)
 							newToken = xml.CharData(val)
 						}
 					}
@@ -146,7 +176,7 @@ func (d *Docx) ReplaceLoop(loopVarName string, data []map[string]string) (err er
 
 	encoder.Flush()
 
-	d.content = newBuffer.String()
+	d.Content = newBuffer.String()
 	return nil
 }
 
@@ -177,7 +207,7 @@ func (d *Docx) Write(ioWriter io.Writer) (err error) {
 			return err
 		}
 		if file.Name == "word/document.xml" {
-			writer.Write([]byte(d.content))
+			writer.Write([]byte(d.Content))
 		} else {
 			writer.Write(streamToByte(readCloser))
 		}
