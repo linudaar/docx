@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -63,7 +62,6 @@ func (d *Docx) Replace(oldString string, newString string, num int) (err error) 
 // During each run of the iteration, the loop placeholders are replaces with
 // the given values in the corresponding data element.
 func (d *Docx) ReplaceLoop(loopVarName string, data []map[string]string) (err error) {
-	fmt.Printf("ReplaceLoop %q \n", loopVarName)
 	newContent := ""
 	newBuffer := bytes.NewBufferString(newContent)
 	newTokens := make(map[string][]xml.Token)
@@ -112,11 +110,9 @@ func (d *Docx) ReplaceLoop(loopVarName string, data []map[string]string) (err er
 			if charData, ok := t.(xml.CharData); ok {
 				cd := strings.Trim(string([]byte(charData)), " ")
 				if cd == mergeFieldOpenTag+loopStartPrefix+loopVarName+mergeFieldCloseTag {
-					fmt.Printf("open tag %q \n", cd)
 					pos = "in"
 					continue
 				} else if cd == mergeFieldOpenTag+loopEndPrefix+loopVarName+mergeFieldCloseTag {
-					fmt.Printf("close tag %q \n", cd)
 					pos = "after"
 					continue
 				}
@@ -156,10 +152,8 @@ func (d *Docx) ReplaceLoop(loopVarName string, data []map[string]string) (err er
 				if charData, ok := newToken.(xml.CharData); ok {
 					cd := strings.Trim(string([]byte(charData)), " ")
 					if strings.HasPrefix(cd, "«") && strings.HasSuffix(cd, "»") {
-						fmt.Printf("Found placeholder %q", cd)
 						key := cd[2 : len(cd)-2]
 						if val, ok := loopElement[key]; ok {
-							fmt.Printf("... replacing with %q \n", val)
 							newToken = xml.CharData(val)
 						}
 					}

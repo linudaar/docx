@@ -42,34 +42,54 @@ func TestReplace1(t *testing.T) {
 	docx1 := r.Editable()
 	var topics = []map[string]string{
 		map[string]string{
-			"name": "topic A",
+			"name": "Grand Theory of Everything",
 			"pos":  "TOP 01",
-			"user": "Thomas Smith",
+			"user": "Stephen Hawkings",
 		},
 		map[string]string{
-			"name": "topic B",
+			"name": "The Breakable Atom",
 			"pos":  "TOP 02",
-			"user": "John Doe",
+			"user": "Niels Bohr",
+		},
+		map[string]string{
+			"name": "At the Speed of Light",
+			"pos":  "TOP 03",
+			"user": "Albert Einstein",
+		},
+		map[string]string{
+			"name": "The Universe and the Rest",
+			"pos":  "TOP 04",
+			"user": "Isaac Newton",
+		},
+		map[string]string{
+			"name": "Why Forty Two",
+			"pos":  "TOP 05",
+			"user": "Douglas Adams",
 		},
 	}
 
 	var participants = []map[string]string{
 		map[string]string{
-			"name": "Hugo",
+			"name": "Albert Einstein",
 		},
 		map[string]string{
-			"name": "Franz",
+			"name": "Isaac Newton",
 		},
 		map[string]string{
-			"name": "Kurt",
+			"name": "Niels Bohr",
 		},
 		map[string]string{
-			"name": "Sepp",
+			"name": "Stephen Hawkings",
+		},
+		map[string]string{
+			"name": "Douglas Adams",
 		},
 	}
 
-	docx1.Replace("AgendaHeader", "My Cool Agenda", 1)
-	docx1.Replace("MeetingDate", "1.1.2017", 1)
+	docx1.Replace("AgendaHeader", "On the Meaning of Life", 1)
+	docx1.Replace("MeetingDate", "01.01.2017 (8:00)", 1)
+	docx1.Replace("additionalInfo", "Dinner in the restaurant at the end of the galaxy!", 1)
+	docx1.Replace("host", "Paranoid Android", 1)
 	docx1.ReplaceLoop("topic", topics)
 	docx1.ReplaceLoop("participant", participants)
 
@@ -86,47 +106,4 @@ func TestReplace1(t *testing.T) {
 	}
 	f2.WriteString(docx1.Content)
 
-}
-
-func TestReplace2(t *testing.T) {
-	fmt.Println("TestReplace1: Open output-1.docx")
-	fileBytes, err := ioutil.ReadFile(RunDir + "/output-1.docx")
-	if err != nil {
-		panic(err)
-	}
-
-	r, err := docx.ReadDoxFileFromBytes(fileBytes)
-	if err != nil {
-		panic(err)
-	}
-
-	docx1 := r.Editable()
-
-	var participants = []map[string]string{
-		map[string]string{
-			"name": "Hugo",
-		},
-		map[string]string{
-			"name": "Franz",
-		},
-		map[string]string{
-			"name": "Kurt",
-		},
-		map[string]string{
-			"name": "Sepp",
-		},
-	}
-
-	docx1.ReplaceLoop("participant", participants)
-	f, err := os.Create(RunDir + "/output-2.docx")
-	if err != nil {
-		panic(err)
-	}
-	w := bufio.NewWriter(f)
-	docx1.Write(w)
-	f2, err := os.Create(RunDir + "/document-2.xml")
-	if err != nil {
-		panic(err)
-	}
-	f2.WriteString(docx1.Content)
 }
